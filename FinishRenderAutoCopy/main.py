@@ -158,7 +158,7 @@ if __name__ == '__main__':
                 filled_block = '■'
                 empty_block = '□'
                 progress_bar = filled_block * num_filled + empty_block * num_empty
-                print(f"{progress_bar}", end='\t')
+                print(f'{progress_bar}', end='\t')
                 print(str(int(progress * 100)) + '%', end='\r', flush=True)
         except:
             print('')
