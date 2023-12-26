@@ -9,7 +9,7 @@ import DaVinciResolveScript as dvr
 from distutils.dir_util import copy_tree
 from multiprocessing import Process
 from kbhit import KBHit
-import kbhit
+import psutil
 
 
 # Colorful terminal output
@@ -137,22 +137,34 @@ if __name__ == '__main__':
     sourceFolderSize = get_directory_size(copySourceFolder)
     for index, des in enumerate(desPath):
         print(f'{bcolors.HEADER}' + str(index + 1) + ' of ' + str(len(desPath)) + ' \t Copying to ' + des + f'{bcolors.ENDC}')
-        proc = Process(target=copy_folder, args=(copySourceFolder, des), daemon=True)
-        proc.start()
-        while proc.is_alive():
-            time.sleep(0.02)
-            # 计算进度浮点数
-            desSize = get_directory_size(des)
-            progress = desSize / sourceFolderSize
-            # 计算进度条的方块数量
-            bar_length = 50  # 进度条长度
-            num_filled = int(progress * bar_length)
-            num_empty = bar_length - num_filled
-            filled_block = '■'
-            empty_block = '□'
-            progress_bar = filled_block * num_filled + empty_block * num_empty
-            print(f"{progress_bar}", end='\t')
-            print(str(int(progress * 100)) + '%', end='\r', flush=True)
+        # Destination should have at least 9.x MB free space after copy
+        usage = psutil.disk_usage(des)
+        free = usage.free
+        if sourceFolderSize + 10000000 > free:
+            print(f'{bcolors.FAIL}Destination does not have enough free space.{bcolors.ENDC}')
+            continue
+        try:
+            proc = Process(target=copy_folder, args=(copySourceFolder, des), daemon=True)
+            proc.start()
+            while proc.is_alive():
+                time.sleep(0.04)
+                # 计算进度浮点数
+                desSize = get_directory_size(des)
+                progress = desSize / sourceFolderSize
+                # 计算进度条的方块数量
+                bar_length = 50  # 进度条长度
+                num_filled = int(progress * bar_length)
+                num_empty = bar_length - num_filled
+                filled_block = '■'
+                empty_block = '□'
+                progress_bar = filled_block * num_filled + empty_block * num_empty
+                print(f"{progress_bar}", end='\t')
+                print(str(int(progress * 100)) + '%', end='\r', flush=True)
+        except:
+            print('')
+            print(f'{bcolors.FAIL}An error occurred. The copy could not be completed.{bcolors.ENDC}')
+            continue
+
         print('')
 
     print(f'🍺 {bcolors.OKGREEN}SUCCEED: Finish copy to all destination.{bcolors.ENDC}')
