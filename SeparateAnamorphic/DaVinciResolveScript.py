@@ -1,30 +1,23 @@
 import sys
-import imp
-import importlib
 import os
+import importlib.util
 
 script_module = None
 try:
-    os.environ[
-        'RESOLVE_SCRIPT_API'] = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting"
-    os.environ[
-        'RESOLVE_SCRIPT_LIB'] = "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so"
-    os.environ['PYTHONPATH'] = "$PYTHONPATH:$RESOLVE_SCRIPT_API/Modules/"
-
     import fusionscript as script_module
 except ImportError:
     # Look for installer based environment variables:
-    import os
-    lib_path=os.getenv("RESOLVE_SCRIPT_LIB")
+    lib_path = os.getenv("RESOLVE_SCRIPT_LIB")
     if lib_path:
         try:
-            #script_module = importlib.import_module("fusionscript", lib_path)
-            script_module = imp.load_dynamic("fusionscript", lib_path)
+            spec = importlib.util.spec_from_file_location("fusionscript", lib_path)
+            script_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(script_module)
         except ImportError:
             pass
     if not script_module:
         # Look for default install locations:
-        ext=".so"
+        ext = ".so"
         if sys.platform.startswith("darwin"):
             path = "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/"
         elif sys.platform.startswith("win") or sys.platform.startswith("cygwin"):
@@ -34,7 +27,9 @@ except ImportError:
             path = "/opt/resolve/libs/Fusion/"
 
         try:
-            script_module = imp.load_dynamic("fusionscript", path + "fusionscript" + ext)
+            spec = importlib.util.spec_from_file_location("fusionscript", path + "fusionscript" + ext)
+            script_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(script_module)
         except ImportError:
             pass
 
