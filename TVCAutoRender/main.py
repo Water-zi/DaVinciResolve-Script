@@ -1,9 +1,6 @@
-# This is a sample Python script.
-
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+# -*- coding: utf-8 -*-
+# 用于支持中文目录输入和输出
 import os
-import time
 
 import DaVinciResolveScript as dvr
 
@@ -40,7 +37,10 @@ if __name__ == '__main__':
     # Read config file
     useOriginalResolution = False
     useOriginalColor = False
-    configFile = open('config.conf', 'r')
+    allowMultipleFPS = True
+    verboseConsole = True
+    relativeRenderDestination = ''
+    configFile = open('config.conf', 'r', encoding='utf-8')
     for line in configFile:
         if line.startswith('#'):
             continue
@@ -60,6 +60,12 @@ if __name__ == '__main__':
                     exit(0)
             case 'UseOriginalColor':
                 useOriginalColor = (value == '1')
+            case 'AllowMultipleFPS':
+                allowMultipleFPS = (value == '1')
+            case 'VerboseConsole':
+                verboseConsole = (value == '1')
+            case 'RelativeRenderDestination':
+                relativeRenderDestination = value
             case _:
                 continue
 
@@ -92,12 +98,16 @@ if __name__ == '__main__':
                     break
 
     folderList = []
+    folderRenderDestinationDictList = {}
     for path in inputPaths:
         reelName = os.path.basename(os.path.normpath(path))
         print(f'{bcolors.OKCYAN}Importing from ' + reelName + f'......{bcolors.ENDC}', end='')
         root = mediaPool.GetRootFolder()
         folder = mediaPool.AddSubFolder(root, reelName)
         folderList.append(folder)
+        if not relativeRenderDestination == '':
+            destination = os.path.normpath(os.path.join(path, relativeRenderDestination))
+            folderRenderDestinationDictList[folder.GetName()] = destination
         mediaPool.SetCurrentFolder(folder)
         mediaList = []
         for root, dirs, _ in os.walk(path, topdown=False):
@@ -110,15 +120,16 @@ if __name__ == '__main__':
         folderList.append(mediaPool.GetCurrentFolder())
 
     # Select a render destination, leave blank may lead to unexpected error
-    renderDestination = ''
-    try:
-        renderDesFile = open('renderDestination.default', 'r')
-        renderDestination = renderDesFile.read()
-        if not os.access(renderDestination, os.W_OK):
-            print(f'{bcolors.WARNING}You do not have write permission to the default render destination.{bcolors.ENDC}')
+    renderDestination = relativeRenderDestination
+    if renderDestination == '':
+        try:
+            renderDesFile = open('renderDestination.default', 'r', encoding='utf-8')
+            renderDestination = renderDesFile.read()
+            if not os.access(renderDestination, os.W_OK):
+                print(f'{bcolors.WARNING}You do not have write permission to the default render destination.{bcolors.ENDC}')
+                renderDestination = ''
+        except:
             renderDestination = ''
-    except:
-        renderDestination = ''
 
     requireEmptyDestination = False
     if renderDestination == '':
@@ -127,7 +138,7 @@ if __name__ == '__main__':
             if not inputStr == '':
                 if os.path.isdir(inputStr):
                     renderDestination = inputStr
-                    renderDesFile = open('renderDestination.default', 'w')
+                    renderDesFile = open('renderDestination.default', 'w', encoding='utf-8')
                     renderDesFile.write(renderDestination)
                     renderDesFile.close()
                     print(f'{bcolors.OKCYAN}Set ' + renderDestination + f' as render destination.{bcolors.ENDC}')
@@ -140,9 +151,23 @@ if __name__ == '__main__':
                     requireEmptyDestination = True
                 else:
                     break
-    else:
-        print(f'{bcolors.OKBLUE}Your default render destination is: {bcolors.UNDERLINE}' + renderDestination + f'{bcolors.ENDC}')
-        inputStr = input(f'{bcolors.HEADER}Please specify a render destination or leave blank to retain current: {bcolors.ENDC}').strip()
+    elif verboseConsole:
+        if relativeRenderDestination == '':
+            print(f'{bcolors.OKBLUE}Your default render destination is: {bcolors.UNDERLINE}' + renderDestination + f'{bcolors.ENDC}')
+            inputStr = input(f'{bcolors.HEADER}Please specify a render destination or leave blank to retain current: {bcolors.ENDC}').strip()
+        else:
+            renderDestinationList = {}
+            for key in folderRenderDestinationDictList.keys():
+                if folderRenderDestinationDictList[key] in renderDestinationList.keys():
+                    renderDestinationList[folderRenderDestinationDictList[key]].append(key)
+                else:
+                    renderDestinationList[folderRenderDestinationDictList[key]] = [key]
+            print(f'{bcolors.OKBLUE}You are using relative render destination: {bcolors.ENDC}')
+            for key in renderDestinationList.keys():
+                for reel in renderDestinationList[key]:
+                    print(f'{bcolors.OKCYAN}' + reel + f' {bcolors.ENDC}', end='')
+                print(f'{bcolors.OKCYAN}will be render to:{bcolors.UNDERLINE}')
+                print(key + f'{bcolors.ENDC}')
 
     # Auto apply LUT part
     # Readout LUT list
@@ -169,7 +194,7 @@ if __name__ == '__main__':
     # Skip if user use original color
     if not useOriginalColor:
         try:
-            lutFile = open('lut.default', 'r')
+            lutFile = open('lut.default', 'r', encoding='utf-8')
             fileContent = lutFile.read()
             manufacturer = fileContent.split(':')[0]
             applyLUT = fileContent.split(':')[-1].split('\n')[0]
@@ -187,7 +212,7 @@ if __name__ == '__main__':
 
         # Read secondary LUT preset list
         try:
-            lutListFile = open('luts.default', 'r')
+            lutListFile = open('luts.default', 'r', encoding='utf-8')
             for line in lutListFile:
                 if ':' not in line:
                     continue
@@ -232,8 +257,8 @@ if __name__ == '__main__':
                         inputStr = input(f'{bcolors.HEADER}Specify a manufacturer if you want to: {bcolors.ENDC}')
                         manufacturer = inputStr
                         applyLUT = lutListPath[lutList[0]]
-                        presetStr = applyLUT + ':' + manufacturer
-                        presetFile = open('lut.default', 'w')
+                        presetStr = manufacturer + ':' + applyLUT
+                        presetFile = open('lut.default', 'w', encoding='utf-8')
                         presetFile.write(presetStr)
                         presetFile.close()
                         break
@@ -254,7 +279,7 @@ if __name__ == '__main__':
         for clip in clips:
             print('Analyzing clip in ' + folder.GetName() + ': ' + clip.GetName() + '                       ', end='\r')
             # Remove timeline, images, and other NOT Video clips
-            if 'Video' not in clip.GetClipProperty('Type'):
+            if 'Video' not in clip.GetClipProperty('Type') and '视频' not in clip.GetClipProperty('Type'):
                 mediaPool.DeleteClips([clip])
                 continue
             # Abort when reel name is empty, require user to obtain a ReelName
@@ -305,7 +330,7 @@ if __name__ == '__main__':
         print('\nEnd of Analyze')
 
         # Check if there are multiple frame rate
-        if len(fpsList) > 1:
+        if not allowMultipleFPS and len(fpsList) > 1:
             print(f'{bcolors.FAIL}Clips has multiple FPS. Use a traditional way and modify them first.{bcolors.ENDC}')
             exit(1)
 
@@ -339,11 +364,15 @@ if __name__ == '__main__':
                         'FormatHeight': height
                     })
                 # Set render destination if its available
-                if not renderDestination == '':
+                if not relativeRenderDestination == '' and folder.GetName() in folderRenderDestinationDictList.keys():
+                    destination = folderRenderDestinationDictList[folder.GetName()]
+                    projectFromResolve.SetRenderSettings({
+                        'TargetDir': str(os.path.join(destination, folder.GetName()))
+                    })
+                elif not renderDestination == '':
                     projectFromResolve.SetRenderSettings({
                         'TargetDir': str(os.path.join(renderDestination, folder.GetName()))
                     })
-                    time.sleep(0.2)
                 projectFromResolve.AddRenderJob()
             except:
                 print(f'{bcolors.WARNING}Failed to create timeline ' + folder.GetName() + '_' + "{:.2f}".format(
