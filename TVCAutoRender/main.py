@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # 用于支持中文目录输入和输出
 import os
+import uuid
 
 import DaVinciResolveScript as dvr
 
@@ -40,34 +41,41 @@ if __name__ == '__main__':
     allowMultipleFPS = True
     verboseConsole = True
     relativeRenderDestination = ''
-    configFile = open('config.conf', 'r', encoding='utf-8')
-    for line in configFile:
-        if line.startswith('#'):
-            continue
-        line = line.removesuffix('\n')
-        key = line.split(':')[0]
-        value = line.split(':')[-1]
-        match key:
-            case 'UseOriginalResolution':
-                useOriginalResolution = (value == '1')
-                if useOriginalResolution and 'TVC_Proxy_OR' not in projectFromResolve.GetRenderPresetList():
-                    print(f'{bcolors.FAIL}You do not have a render preset called \'{bcolors.BOLD}TVC_Proxy_OR{bcolors.ENDC}{bcolors.FAIL}\'. You should create this preset first.{bcolors.ENDC}')
-                    print(f'{bcolors.WARNING}Remember to have \'Render at source resolution\' checked.')
-                    exit(0)
-                elif 'TVC_Proxy' not in projectFromResolve.GetRenderPresetList():
-                    print(f'{bcolors.FAIL}You do not have a render preset called \'{bcolors.BOLD}TVC_Proxy{bcolors.ENDC}{bcolors.FAIL}\'. You should create this preset first.{bcolors.ENDC}')
-                    print(f'{bcolors.WARNING}Remember to have \'Render at source resolution\' unchecked. And specify the correct format, audio tracks, etc.')
-                    exit(0)
-            case 'UseOriginalColor':
-                useOriginalColor = (value == '1')
-            case 'AllowMultipleFPS':
-                allowMultipleFPS = (value == '1')
-            case 'VerboseConsole':
-                verboseConsole = (value == '1')
-            case 'RelativeRenderDestination':
-                relativeRenderDestination = value
-            case _:
+    overrideExistingLUT = False
+    try:
+        configFile = open('config.conf', 'r', encoding='utf-8')
+        for line in configFile:
+            if line.startswith('#'):
                 continue
+            line = line.removesuffix('\n')
+            key = line.split(':')[0]
+            value = line.split(':')[-1]
+            match key:
+                case 'UseOriginalResolution':
+                    useOriginalResolution = (value == '1')
+                    if useOriginalResolution and 'TVC_Proxy_OR' not in projectFromResolve.GetRenderPresetList():
+                        print(f'{bcolors.FAIL}You do not have a render preset called \'{bcolors.BOLD}TVC_Proxy_OR{bcolors.ENDC}{bcolors.FAIL}\'. You should create this preset first.{bcolors.ENDC}')
+                        print(f'{bcolors.WARNING}Remember to have \'Render at source resolution\' checked.')
+                        exit(0)
+                    elif 'TVC_Proxy' not in projectFromResolve.GetRenderPresetList():
+                        print(f'{bcolors.FAIL}You do not have a render preset called \'{bcolors.BOLD}TVC_Proxy{bcolors.ENDC}{bcolors.FAIL}\'. You should create this preset first.{bcolors.ENDC}')
+                        print(f'{bcolors.WARNING}Remember to have \'Render at source resolution\' unchecked. And specify the correct format, audio tracks, etc.')
+                        exit(0)
+                case 'UseOriginalColor':
+                    useOriginalColor = (value == '1')
+                case 'AllowMultipleFPS':
+                    allowMultipleFPS = (value == '1')
+                case 'VerboseConsole':
+                    verboseConsole = (value == '1')
+                case 'RelativeRenderDestination':
+                    relativeRenderDestination = value
+                case 'OverrideExistingLUT':
+                    overrideExistingLUT = (value == '1')
+                case _:
+                    continue
+    except FileNotFoundError:
+        print(f'{bcolors.FAIL}Failed to read config. Make sure config.conf is reachable.{bcolors.ENDC}')
+        exit(0)
 
     # Import clips from terminal
     inputPaths = []
@@ -128,7 +136,7 @@ if __name__ == '__main__':
             if not os.access(renderDestination, os.W_OK):
                 print(f'{bcolors.WARNING}You do not have write permission to the default render destination.{bcolors.ENDC}')
                 renderDestination = ''
-        except:
+        except FileNotFoundError:
             renderDestination = ''
 
     requireEmptyDestination = False
@@ -168,6 +176,8 @@ if __name__ == '__main__':
                     print(f'{bcolors.OKCYAN}' + reel + f' {bcolors.ENDC}', end='')
                 print(f'{bcolors.OKCYAN}will be render to:{bcolors.UNDERLINE}')
                 print(key + f'{bcolors.ENDC}')
+    else:
+        print(f'{bcolors.OKCYAN}Non Verbose Mode - Using Render Destination Preset.{bcolors.ENDC}')
 
     # Auto apply LUT part
     # Readout LUT list
@@ -199,16 +209,18 @@ if __name__ == '__main__':
             manufacturer = fileContent.split(':')[0]
             applyLUT = fileContent.split(':')[-1].split('\n')[0]
             if not applyLUT == '':
+                print('Primary Lut Preset:')
                 if manufacturer == '':
-                    print(f'{bcolors.OKBLUE}Will apply ' + applyLUT + f' to Any Clip.{bcolors.ENDC}')
+                    print(f'{bcolors.OKBLUE}' + applyLUT + f' -> Any Clip.{bcolors.ENDC}')
                 else:
-                    print(f'{bcolors.OKBLUE}Will apply ' + applyLUT + ' to ' + manufacturer + f'.{bcolors.ENDC}')
-                inputStr = input(f'{bcolors.HEADER}Would you like to use this preset? (\'y\' or empty for yes): {bcolors.ENDC}')
-                if not inputStr == '' and not inputStr == 'y':
-                    applyLUT = ''
-                    manufacturer = ''
-        except:
-            print('No Lut Preset')
+                    print(f'{bcolors.OKBLUE}' + applyLUT + ' -> ' + manufacturer + f'.{bcolors.ENDC}')
+                if verboseConsole:
+                    inputStr = input(f'{bcolors.HEADER}Would you like to use this preset? (\'y\' or empty for yes): {bcolors.ENDC}')
+                    if not inputStr == '' and not inputStr == 'y':
+                        applyLUT = ''
+                        manufacturer = ''
+        except FileNotFoundError:
+            print('No Primary Lut Preset')
 
         # Read secondary LUT preset list
         try:
@@ -221,11 +233,11 @@ if __name__ == '__main__':
                 if not listApplyLut == '' and not listManufacturer == '':
                     lutPresetList[listManufacturer] = listApplyLut
             if len(lutPresetList) > 0:
-                print('Below is the list of secondary LUTs:')
+                print('Secondary LUTs Preset:')
                 for key in lutPresetList.keys():
-                    print(f'{bcolors.OKBLUE}Will apply ' + key + ' to ' + lutPresetList[key] + f'.{bcolors.ENDC}')
-        except:
-            print('For Advanced User: No Lut List, just ignore if you dont understand.')
+                    print(f'{bcolors.OKBLUE}' + key + ' -> ' + lutPresetList[key] + f'.{bcolors.ENDC}')
+        except FileNotFoundError:
+            print('For Advanced User: No Secondary Lut Preset, ignore if you don\'t understand.')
 
         while applyLUT == '':
             inputStr = input(f'{bcolors.HEADER}Search for LUT (\'ls\' to list, empty to skip): {bcolors.ENDC}')
@@ -287,24 +299,24 @@ if __name__ == '__main__':
                 print(f'{bcolors.FAIL}Reel Name is empty, this is not allowed, please specify a reel name.')
                 exit(0)
             # Apply LUT if user needs to
-            if not useOriginalColor and not applyLUT == '':
-                appliedLUTName = ''
-                if not manufacturer == '' and not clip.GetMetadata('Camera Manufacturer') == manufacturer:
-                    actucalManufacturer = clip.GetMetadata('Camera Manufacturer')
-                    try:
-                        actualLUT = lutPresetList[actucalManufacturer]
-                    except:
-                        actualLUT = ''
-                    if not actualLUT == '':
-                        clip.SetClipProperty('Input LUT', actualLUT)
-                        if not clip.GetClipProperty('Input LUT') == actualLUT:
+            if not useOriginalColor and (not applyLUT == '' or len(lutPresetList) > 0):
+                if overrideExistingLUT or clip.GetClipProperty('Input LUT') == '':
+                    if applyLUT == '' or (len(lutPresetList) > 0 and not manufacturer == '' and not clip.GetMetadata('Camera Manufacturer') == manufacturer):
+                        actucalManufacturer = clip.GetMetadata('Camera Manufacturer')
+                        if actucalManufacturer in lutPresetList.keys():
+                            actualLUT = lutPresetList[actucalManufacturer]
+                        else:
+                            actualLUT = ''
+                        if not actualLUT == '':
+                            clip.SetClipProperty('Input LUT', actualLUT)
+                            if not clip.GetClipProperty('Input LUT') == actualLUT:
+                                print(f'{bcolors.FAIL}Failed to apply LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.FAIL}. Probably because LUT does not exist.')
+                        else:
+                            print(f'{bcolors.WARNING}Skip applying LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.WARNING}. Manufacturer Not Match.{bcolors.ENDC}')
+                    elif not applyLUT == '':
+                        clip.SetClipProperty('Input LUT', applyLUT)
+                        if not clip.GetClipProperty('Input LUT') == applyLUT:
                             print(f'{bcolors.FAIL}Failed to apply LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.FAIL}. Probably because LUT does not exist.')
-                    else:
-                        print(f'{bcolors.WARNING}Skip applying LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.WARNING}. Manufacturer Not Match.{bcolors.ENDC}')
-                elif clip.GetClipProperty('Input LUT') == '':
-                    clip.SetClipProperty('Input LUT', applyLUT)
-                    if not clip.GetClipProperty('Input LUT') == applyLUT:
-                        print(f'{bcolors.FAIL}Failed to apply LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.FAIL}. Probably because LUT does not exist.')
                 else:
                     print(f'{bcolors.WARNING}Skip applying LUT to {bcolors.UNDERLINE}' + clip.GetName() + f'{bcolors.ENDC}{bcolors.WARNING}. Please remove the LUT on it first.{bcolors.ENDC}')
             clipResolution = clip.GetClipProperty('Resolution')
@@ -335,48 +347,52 @@ if __name__ == '__main__':
             exit(1)
 
         for key in timelineList.keys():
-            try:
-                timeline = mediaPool.CreateTimelineFromClips(folder.GetName() + '_' + "{:.2f}".format(key), timelineList[key])
-                width = 1920
-                height = 1920
-                if key < 1:
-                    width = round(height * key / 2) * 2
-                else:
-                    height = round(width / key / 2) * 2
-                timeline.SetSetting('useCustomSettings', '1')
-                timeline.SetSetting('timelineResolutionHeight', str(height))
-                timeline.SetSetting('timelineOutputResolutionHeight', str(height))
-                timeline.SetSetting('timelineResolutionWidth', str(width))
-                timeline.SetSetting('timelineOutputResolutionWidth', str(width))
-                print(f'{bcolors.OKCYAN}Successfully created ' + timeline.GetName() + ' - ' + str(width) + 'x' + str(height) + f'{bcolors.ENDC}')
-                projectFromResolve.SetCurrentTimeline(timeline)
-                # You should have a RENDER PRESET named 'TVC_Proxy' or 'TVC_Proxy_OR', that setup for the right settings base on your own needs,
-                # e.g. format, audio tracks, and fileName regulation
-                if useOriginalResolution:
-                    if 'TVC_Proxy_OR' in projectFromResolve.GetRenderPresetList():
-                        projectFromResolve.LoadRenderPreset('TVC_Proxy_OR')
-                else:
-                    if 'TVC_Proxy' in projectFromResolve.GetRenderPresetList():
-                        projectFromResolve.LoadRenderPreset('TVC_Proxy')
-                    # Set timeline output resolution base on itself
-                    projectFromResolve.SetRenderSettings({
-                        'FormatWidth': width,
-                        'FormatHeight': height
-                    })
-                # Set render destination if its available
-                if not relativeRenderDestination == '' and folder.GetName() in folderRenderDestinationDictList.keys():
-                    destination = folderRenderDestinationDictList[folder.GetName()]
-                    projectFromResolve.SetRenderSettings({
-                        'TargetDir': str(os.path.join(destination, folder.GetName()))
-                    })
-                elif not renderDestination == '':
-                    projectFromResolve.SetRenderSettings({
-                        'TargetDir': str(os.path.join(renderDestination, folder.GetName()))
-                    })
-                projectFromResolve.AddRenderJob()
-            except:
-                print(f'{bcolors.WARNING}Failed to create timeline ' + folder.GetName() + '_' + "{:.2f}".format(
-                    key) + f', timeline exist.{bcolors.ENDC}')
-                continue
+            timelineCount = projectFromResolve.GetTimelineCount()
+            timelineNameList = []
+            for idx in range(timelineCount):
+                tempTimeline = projectFromResolve.GetTimelineByIndex(idx + 1)
+                print(tempTimeline.GetName())
+                timelineNameList.append(tempTimeline.GetName())
+            actualTimelineName = folder.GetName() + '_' + "{:.2f}".format(key)
+            if actualTimelineName in timelineNameList:
+                actualTimelineName = actualTimelineName + '_' + str(uuid.uuid4())
+            timeline = mediaPool.CreateTimelineFromClips(actualTimelineName, timelineList[key])
+            width = 1920
+            height = 1920
+            if key < 1:
+                width = round(height * key / 2) * 2
+            else:
+                height = round(width / key / 2) * 2
+            timeline.SetSetting('useCustomSettings', '1')
+            timeline.SetSetting('timelineResolutionHeight', str(height))
+            timeline.SetSetting('timelineOutputResolutionHeight', str(height))
+            timeline.SetSetting('timelineResolutionWidth', str(width))
+            timeline.SetSetting('timelineOutputResolutionWidth', str(width))
+            print(f'{bcolors.OKCYAN}Successfully created ' + timeline.GetName() + ' - ' + str(width) + 'x' + str(height) + f'{bcolors.ENDC}')
+            projectFromResolve.SetCurrentTimeline(timeline)
+            # You should have a RENDER PRESET named 'TVC_Proxy' or 'TVC_Proxy_OR', that setup for the right settings base on your own needs,
+            # e.g. format, audio tracks, and fileName regulation
+            if useOriginalResolution:
+                if 'TVC_Proxy_OR' in projectFromResolve.GetRenderPresetList():
+                    projectFromResolve.LoadRenderPreset('TVC_Proxy_OR')
+            else:
+                if 'TVC_Proxy' in projectFromResolve.GetRenderPresetList():
+                    projectFromResolve.LoadRenderPreset('TVC_Proxy')
+                # Set timeline output resolution base on itself
+                projectFromResolve.SetRenderSettings({
+                    'FormatWidth': width,
+                    'FormatHeight': height
+                })
+            # Set render destination if its available
+            if not relativeRenderDestination == '' and folder.GetName() in folderRenderDestinationDictList.keys():
+                destination = folderRenderDestinationDictList[folder.GetName()]
+                projectFromResolve.SetRenderSettings({
+                    'TargetDir': str(os.path.join(destination, folder.GetName()))
+                })
+            elif not renderDestination == '':
+                projectFromResolve.SetRenderSettings({
+                    'TargetDir': str(os.path.join(renderDestination, folder.GetName()))
+                })
+            projectFromResolve.AddRenderJob()
 
     print(f'🍺 {bcolors.OKGREEN}Operation Complete.{bcolors.ENDC}')
